@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ContentProcessingService } from './content-processing.service';
 import { ContentProcessingController } from './content-processing.controller';
-import { GeminiAiService } from './gemini-ai.service';
+import { ClaudeAiService } from './claude-ai.service';
+import { OpenAiAudioService } from './openai-audio.service';
 import { ProcessedContent, ProcessedContentSchema } from '../schemas/processed-content.schema';
 import { UserFormatsModule } from '../user-formats/user-formats.module';
 
@@ -14,7 +15,7 @@ import { UserFormatsModule } from '../user-formats/user-formats.module';
     UserFormatsModule,
   ],
   controllers: [ContentProcessingController],
-  providers: [ContentProcessingService, GeminiAiService],
-  exports: [ContentProcessingService, GeminiAiService],
+  providers: [ContentProcessingService, ClaudeAiService, OpenAiAudioService],
+  exports: [ContentProcessingService, ClaudeAiService, OpenAiAudioService],
 })
 export class ContentProcessingModule {}

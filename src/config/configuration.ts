@@ -18,7 +18,10 @@ export default () => ({
     pass: process.env.MAIL_PASS,
     from: process.env.MAIL_FROM,
   },
-  gemini: {
-    apiKey: process.env.GEMINI_API_KEY,
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY,
   },
 });

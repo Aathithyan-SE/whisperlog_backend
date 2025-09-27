@@ -1,55 +1,67 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ProcessedContent, ProcessedContentDocument, ContentType } from '../schemas/processed-content.schema';
 import { ProcessContentDto } from './dto/process-content.dto';
 import { QueryProcessedContentDto } from './dto/query-processed-content.dto';
-import { GeminiAiService } from './gemini-ai.service';
+import { ClaudeAiService } from './claude-ai.service';
+import { OpenAiAudioService } from './openai-audio.service';
 import { UserFormatsService } from '../user-formats/user-formats.service';
 
 @Injectable()
 export class ContentProcessingService {
+  private readonly logger = new Logger(ContentProcessingService.name);
+
   constructor(
     @InjectModel(ProcessedContent.name)
     private processedContentModel: Model<ProcessedContentDocument>,
-    private geminiAiService: GeminiAiService,
+    private claudeAiService: ClaudeAiService,
+    private openAiAudioService: OpenAiAudioService,
     private userFormatsService: UserFormatsService,
   ) {}
 
   async processContent(userId: string, processContentDto: ProcessContentDto) {
     const { formatId, contentType, content } = processContentDto;
 
+    this.logger.log(`Processing content for user ${userId}, format ${formatId}, type ${contentType}`);
+
     // Get the user format
     const userFormat = await this.userFormatsService.findByIdForProcessing(formatId, userId);
-
-    // Check if AI service is available
-    const isAiAvailable = await this.geminiAiService.isServiceAvailable();
-    if (!isAiAvailable) {
-      throw new BadRequestException('AI processing service is currently unavailable');
-    }
 
     const startTime = Date.now();
     let processedContent: string;
 
     try {
-      // Process content based on type
-      if (contentType === ContentType.TEXT) {
-        processedContent = await this.geminiAiService.processTextContent(
-          content,
-          userFormat.format,
-          userFormat.instruction,
-        );
-      } else if (contentType === ContentType.AUDIO) {
-        processedContent = await this.geminiAiService.processAudioContent(
-          content,
-          userFormat.format,
-          userFormat.instruction,
-        );
-      } else {
-        throw new BadRequestException('Unsupported content type');
-      }
+      // Process content with retry mechanism
+      processedContent = await this.processContentWithRetry(
+        contentType,
+        content,
+        userFormat.format,
+        userFormat.instruction,
+      );
     } catch (error) {
-      throw new BadRequestException(`Failed to process content: ${error.message}`);
+      this.logger.error(`Failed to process content for user ${userId}: ${error.message}`);
+      
+      // Check if it's a service unavailable error
+      if (error.message.includes('503') || error.message.includes('Service Unavailable') || 
+          error.message.includes('currently unavailable')) {
+        throw new ServiceUnavailableException(
+          'The AI processing service is temporarily unavailable. Please try again in a few minutes.',
+        );
+      }
+      
+      // Check if it's an API key or authentication error
+      if (error.message.includes('API key') || error.message.includes('authentication') || 
+          error.message.includes('401') || error.message.includes('403')) {
+        throw new ServiceUnavailableException(
+          'AI processing service configuration error. Please contact support.',
+        );
+      }
+      
+      // Generic processing error
+      throw new BadRequestException(
+        'Failed to process your content. Please check your input and try again.',
+      );
     }
 
     const processingTime = Date.now() - startTime;
@@ -64,7 +76,7 @@ export class ContentProcessingService {
       processingMetadata: {
         submissionDate: new Date(),
         processingTime,
-        aiModel: 'gemini-1.5-flash',
+        aiModel: 'openai-whisper-gpt4',
       },
     });
 
@@ -75,6 +87,90 @@ export class ContentProcessingService {
     ]);
 
     return processedContentDoc;
+  }
+
+  private async processContentWithRetry(
+    contentType: ContentType,
+    content: string,
+    formatTemplate: string,
+    formatInstruction?: string,
+    maxRetries: number = 3,
+    retryDelay: number = 2000,
+  ): Promise<string> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.log(`Processing attempt ${attempt}/${maxRetries}`);
+
+        // Check if OpenAI service is available for audio, Claude for text
+        if (contentType === ContentType.AUDIO) {
+          const isOpenAiAvailable = await this.openAiAudioService.isServiceAvailable();
+          if (!isOpenAiAvailable) {
+            throw new Error('OpenAI audio processing service is currently unavailable');
+          }
+        } else {
+          const isClaudeAvailable = await this.claudeAiService.isServiceAvailable();
+          if (!isClaudeAvailable) {
+            throw new Error('Claude text processing service is currently unavailable');
+          }
+        }
+
+        // Process content based on type
+        if (contentType === ContentType.TEXT) {
+          // Use OpenAI for text as well for consistency
+          return await this.openAiAudioService.processTextContent(
+            content,
+            formatTemplate,
+            formatInstruction,
+          );
+        } else if (contentType === ContentType.AUDIO) {
+          // 🚀 DIRECT AUDIO PROCESSING - Voice Note → Formatted Content in ONE STEP!
+          this.logger.log('🎤 === DIRECT AUDIO PROCESSING START ===');
+          this.logger.log('🚀 Using OpenAI Whisper + GPT-4 for direct voice-to-format processing');
+          this.logger.log(`🔊 Audio Data Length: ${content.length} characters (base64)`);
+          
+          // Process audio directly with OpenAI (Whisper + GPT-4)
+          const formattedContent = await this.openAiAudioService.processAudioDirectly(
+            content,
+            formatTemplate,
+            formatInstruction,
+          );
+          
+          this.logger.log('🎉 === DIRECT AUDIO PROCESSING COMPLETE ===');
+          this.logger.log(`📄 Final Formatted Content: "${formattedContent.substring(0, 200)}..."`);
+          
+          return formattedContent;
+        } else {
+          throw new BadRequestException('Unsupported content type');
+        }
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(`Processing attempt ${attempt} failed: ${error.message}`);
+
+        // Don't retry for certain types of errors
+        if (
+          error.message.includes('Unsupported content type') ||
+          error.message.includes('API key') ||
+          error.message.includes('401') ||
+          error.message.includes('403')
+        ) {
+          throw error;
+        }
+
+        // If this is the last attempt, throw the error
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        // Wait before retrying (exponential backoff)
+        const delay = retryDelay * Math.pow(2, attempt - 1);
+        this.logger.log(`Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
   }
 
   async findAll(userId: string, queryDto: QueryProcessedContentDto) {

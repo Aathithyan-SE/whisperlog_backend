@@ -44,7 +44,7 @@ export class ContentProcessingController {
         processingMetadata: {
           submissionDate: '2023-01-01T00:00:00.000Z',
           processingTime: 1500,
-          aiModel: 'gemini-1.5-flash',
+          aiModel: 'openai-whisper-gpt4',
         },
         isActive: true,
         createdAt: '2023-01-01T00:00:00.000Z',
@@ -54,6 +54,7 @@ export class ContentProcessingController {
   })
   @ApiResponse({ status: 400, description: 'Invalid content or format' })
   @ApiResponse({ status: 404, description: 'Format not found' })
+  @ApiResponse({ status: 503, description: 'AI processing service temporarily unavailable' })
   async processContent(@Req() req: any, @Body() processContentDto: ProcessContentDto) {
     return this.contentProcessingService.processContent(req.user.userId, processContentDto);
   }
@@ -92,7 +93,7 @@ export class ContentProcessingController {
             processingMetadata: {
               submissionDate: '2023-01-01T00:00:00.000Z',
               processingTime: 1500,
-              aiModel: 'gemini-1.5-flash',
+              aiModel: 'openai-whisper-gpt4',
             },
             isActive: true,
             createdAt: '2023-01-01T00:00:00.000Z',
@@ -176,7 +177,7 @@ export class ContentProcessingController {
         processingMetadata: {
           submissionDate: '2023-01-01T00:00:00.000Z',
           processingTime: 1500,
-          aiModel: 'gemini-1.5-flash',
+          aiModel: 'openai-whisper-gpt4',
         },
         isActive: true,
         createdAt: '2023-01-01T00:00:00.000Z',

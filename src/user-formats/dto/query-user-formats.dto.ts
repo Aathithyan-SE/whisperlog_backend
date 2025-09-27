@@ -1,20 +1,21 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsNumberString, Min } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsOptional, IsString, IsInt, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class QueryUserFormatsDto {
-  @ApiPropertyOptional({ example: '1', description: 'Page number (default: 1)' })
+  @ApiPropertyOptional({ example: 1, description: 'Page number (default: 1)' })
   @IsOptional()
-  @IsNumberString()
-  @Transform(({ value }) => parseInt(value, 10))
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({ example: '10', description: 'Items per page (default: 10, max: 50)' })
+  @ApiPropertyOptional({ example: 10, description: 'Items per page (default: 10, max: 50)' })
   @IsOptional()
-  @IsNumberString()
-  @Transform(({ value }) => Math.min(parseInt(value, 10), 50))
+  @Type(() => Number)
+  @IsInt()
   @Min(1)
+  @Transform(({ value }) => Math.min(value, 50))
   limit?: number = 10;
 
   @ApiPropertyOptional({ example: 'meeting', description: 'Search in title and description' })
