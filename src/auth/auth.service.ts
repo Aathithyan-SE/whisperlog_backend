@@ -28,7 +28,8 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto) {
-    const { username, email, password } = registerDto;
+    const { username, password } = registerDto;
+    const email = registerDto.email.toLowerCase(); // Normalize email to lowercase
 
     // Check if user already exists
     const existingUser = await this.userModel.findOne({
@@ -73,7 +74,8 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const { email, password } = loginDto;
+    const { password } = loginDto;
+    const email = loginDto.email.toLowerCase(); // Normalize email to lowercase
 
     // Find user
     const user = await this.userModel.findOne({ email, isActive: true });
@@ -102,7 +104,8 @@ export class AuthService {
   }
 
   async googleLogin(googleUser: any) {
-    const { googleId, email, username } = googleUser;
+    const { googleId, username } = googleUser;
+    const email = googleUser.email.toLowerCase(); // Normalize email to lowercase
 
     let user = await this.userModel.findOne({ 
       $or: [{ googleId }, { email }] 
@@ -156,7 +159,7 @@ export class AuthService {
   }
 
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
-    const { email } = forgotPasswordDto;
+    const email = forgotPasswordDto.email.toLowerCase(); // Normalize email to lowercase
 
     const user = await this.userModel.findOne({ email, isActive: true });
     if (!user) {
@@ -188,7 +191,8 @@ export class AuthService {
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
-    const { email, otp, newPassword } = resetPasswordDto;
+    const { otp, newPassword } = resetPasswordDto;
+    const email = resetPasswordDto.email.toLowerCase(); // Normalize email to lowercase
 
     // Find user
     const user = await this.userModel.findOne({ email, isActive: true });

@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { ProcessedContent, ProcessedContentDocument, ContentType } from '../schemas/processed-content.schema';
 import { ProcessContentDto } from './dto/process-content.dto';
 import { QueryProcessedContentDto } from './dto/query-processed-content.dto';
+import { UpdateProcessedContentDto } from './dto/update-processed-content.dto';
 import { ClaudeAiService } from './claude-ai.service';
 import { OpenAiAudioService } from './openai-audio.service';
 import { UserFormatsService } from '../user-formats/user-formats.service';
@@ -71,7 +72,7 @@ export class ContentProcessingService {
       userId: new Types.ObjectId(userId),
       formatId: new Types.ObjectId(formatId),
       contentType,
-      originalContent: content,
+      originalContent: contentType === ContentType.AUDIO ? '[Voice Note - Not Stored]' : content,
       processedContent,
       processingMetadata: {
         submissionDate: new Date(),
@@ -94,7 +95,7 @@ export class ContentProcessingService {
     content: string,
     formatTemplate: string,
     formatInstruction?: string,
-    maxRetries: number = 3,
+    maxRetries: number = 1,
     retryDelay: number = 2000,
   ): Promise<string> {
     let lastError: any;
@@ -174,21 +175,188 @@ export class ContentProcessingService {
   }
 
   async findAll(userId: string, queryDto: QueryProcessedContentDto) {
-    const { page, limit, search, contentType, formatId, sortBy, sortOrder } = queryDto;
+    const { page, limit, search, formatName, contentType, formatId, sortBy, sortOrder, dateFrom, dateTo } = queryDto;
     const skip = (page - 1) * limit;
 
-    // Build filter
+    // Build aggregation pipeline for enhanced search
+    const pipeline: any[] = [
+      {
+        $match: {
+          userId: new Types.ObjectId(userId),
+          isActive: true,
+        },
+      },
+    ];
+
+    // Add date filtering
+    if (dateFrom || dateTo) {
+      const dateFilter: any = {};
+      if (dateFrom) {
+        dateFilter.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        // Add one day to include the entire end date
+        const endDate = new Date(dateTo);
+        endDate.setDate(endDate.getDate() + 1);
+        dateFilter.$lt = endDate;
+      }
+      pipeline[0].$match.createdAt = dateFilter;
+    }
+
+    // Add content type filter
+    if (contentType) {
+      pipeline[0].$match.contentType = contentType;
+    }
+
+    // Add format ID filter
+    if (formatId) {
+      pipeline[0].$match.formatId = new Types.ObjectId(formatId);
+    }
+
+    // Lookup format information for search
+    pipeline.push({
+      $lookup: {
+        from: 'userformats',
+        localField: 'formatId',
+        foreignField: '_id',
+        as: 'format',
+      },
+    });
+
+    pipeline.push({
+      $unwind: '$format',
+    });
+
+    // Add search filters
+    const searchConditions: any[] = [];
+    
+    if (search) {
+      // Search in both processed content and format names
+      searchConditions.push(
+        { processedContent: { $regex: search, $options: 'i' } },
+        { 'format.title': { $regex: search, $options: 'i' } }
+      );
+    }
+
+    if (formatName) {
+      // Search specifically in format names
+      searchConditions.push(
+        { 'format.title': { $regex: formatName, $options: 'i' } }
+      );
+    }
+
+    if (searchConditions.length > 0) {
+      pipeline.push({
+        $match: {
+          $or: searchConditions,
+        },
+      });
+    }
+
+    // Lookup user information
+    pipeline.push({
+      $lookup: {
+        from: 'users',
+        localField: 'userId',
+        foreignField: '_id',
+        as: 'user',
+      },
+    });
+
+    pipeline.push({
+      $unwind: '$user',
+    });
+
+    // Project fields to match the expected structure
+    pipeline.push({
+      $project: {
+        _id: 1,
+        userId: {
+          _id: '$user._id',
+          username: '$user.username',
+          email: '$user.email',
+        },
+        formatId: {
+          _id: '$format._id',
+          title: '$format.title',
+          iconName: '$format.iconName',
+          description: '$format.description',
+        },
+        contentType: 1,
+        originalContent: 1,
+        processedContent: 1,
+        processingMetadata: 1,
+        isActive: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    });
+
+    // Add sorting
+    const sortStage: any = {};
+    sortStage[sortBy] = sortOrder === 'asc' ? 1 : -1;
+    pipeline.push({ $sort: sortStage });
+
+    // Get total count
+    const countPipeline = [...pipeline, { $count: 'total' }];
+    
+    // Add pagination
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limit });
+
+    // Execute queries
+    const [processedContents, countResult] = await Promise.all([
+      this.processedContentModel.aggregate(pipeline).exec(),
+      this.processedContentModel.aggregate(countPipeline).exec(),
+    ]);
+
+    const total = countResult.length > 0 ? countResult[0].total : 0;
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: processedContents,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
+  }
+
+  async findByFormat(userId: string, formatId: string, queryDto: QueryProcessedContentDto) {
+    // First verify that the format belongs to the user
+    const userFormat = await this.userFormatsService.findByIdForProcessing(formatId, userId);
+    
+    const { page, limit, search, contentType, sortBy, sortOrder, dateFrom, dateTo } = queryDto;
+    const skip = (page - 1) * limit;
+
+    // Build filter - specifically for this format
     const filter: any = {
       userId: new Types.ObjectId(userId),
+      formatId: new Types.ObjectId(formatId),
       isActive: true,
     };
 
-    if (contentType) {
-      filter.contentType = contentType;
+    // Add date filtering
+    if (dateFrom || dateTo) {
+      const dateFilter: any = {};
+      if (dateFrom) {
+        dateFilter.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        // Add one day to include the entire end date
+        const endDate = new Date(dateTo);
+        endDate.setDate(endDate.getDate() + 1);
+        dateFilter.$lt = endDate;
+      }
+      filter.createdAt = dateFilter;
     }
 
-    if (formatId) {
-      filter.formatId = new Types.ObjectId(formatId);
+    if (contentType) {
+      filter.contentType = contentType;
     }
 
     if (search) {
@@ -208,7 +376,7 @@ export class ContentProcessingService {
         .limit(limit)
         .populate([
           { path: 'userId', select: 'username email' },
-          { path: 'formatId', select: 'title iconName description' },
+          { path: 'formatId', select: 'title iconName description format instruction' },
         ])
         .exec(),
       this.processedContentModel.countDocuments(filter),
@@ -217,6 +385,14 @@ export class ContentProcessingService {
     const totalPages = Math.ceil(total / limit);
 
     return {
+      format: {
+        _id: userFormat._id,
+        title: userFormat.title,
+        description: userFormat.description,
+        iconName: userFormat.iconName,
+        format: userFormat.format,
+        instruction: userFormat.instruction,
+      },
       data: processedContents,
       pagination: {
         page,
@@ -245,6 +421,35 @@ export class ContentProcessingService {
     if (!processedContent) {
       throw new NotFoundException('Processed content not found');
     }
+
+    return processedContent;
+  }
+
+  async update(userId: string, id: string, updateDto: UpdateProcessedContentDto) {
+    const processedContent = await this.processedContentModel
+      .findOne({
+        _id: new Types.ObjectId(id),
+        userId: new Types.ObjectId(userId),
+        isActive: true,
+      })
+      .exec();
+
+    if (!processedContent) {
+      throw new NotFoundException('Processed content not found');
+    }
+
+    // Update the processed content
+    if (updateDto.processedContent !== undefined) {
+      processedContent.processedContent = updateDto.processedContent;
+    }
+
+    await processedContent.save();
+
+    // Return the updated document with populated fields
+    await processedContent.populate([
+      { path: 'userId', select: 'username email' },
+      { path: 'formatId', select: 'title iconName description format instruction' },
+    ]);
 
     return processedContent;
   }

@@ -11,7 +11,7 @@ http://localhost:3000
 
 ## Authentication
 
-Most endpoints require authentication using Bearer tokens. Include the token in the Authorization header:
+Most endpoints require authentication using Bearer tokens. Incnlude the token in the Authorization header:
 
 ```
 Authorization: Bearer <your_jwt_token>
@@ -372,21 +372,37 @@ GET /user-formats?page=1&limit=10&search=meeting&sortBy=createdAt&sortOrder=desc
 
 #### Get All Processed Content
 - **GET** `/content-processing`
-- **Description**: Get all processed content with pagination and filters
+- **Description**: Get all processed content with pagination and enhanced filters
 - **Authentication**: Required
 
 **Query Parameters:**
 - `page` (optional): Page number (default: 1)
 - `limit` (optional): Items per page (default: 10, max: 50)
-- `search` (optional): Search in processed content
+- `search` (optional): Search in processed content and format names
+- `formatName` (optional): Search specifically in format names
 - `contentType` (optional): Filter by content type (text, audio)
 - `formatId` (optional): Filter by format ID
 - `sortBy` (optional): Sort field (createdAt, updatedAt)
 - `sortOrder` (optional): Sort order (asc, desc)
+- `dateFrom` (optional): Filter content created from this date (YYYY-MM-DD)
+- `dateTo` (optional): Filter content created until this date (YYYY-MM-DD)
 
-**Example Request:**
+**Example Requests:**
 ```
-GET /content-processing?page=1&limit=10&contentType=text&sortBy=createdAt&sortOrder=desc
+# Basic pagination
+GET /content-processing?page=1&limit=10&sortBy=createdAt&sortOrder=desc
+
+# Search in both content and format names
+GET /content-processing?search=meeting&page=1&limit=10
+
+# Search specifically in format names
+GET /content-processing?formatName=Meeting%20Notes&page=1&limit=5
+
+# Filter by date range
+GET /content-processing?dateFrom=2023-12-01&dateTo=2023-12-31&page=1&limit=10
+
+# Combined filters
+GET /content-processing?search=action%20items&contentType=text&dateFrom=2023-12-01&sortBy=createdAt&sortOrder=desc
 ```
 
 **Response (200):**
@@ -466,6 +482,119 @@ GET /content-processing?page=1&limit=10&contentType=text&sortBy=createdAt&sortOr
 
 ---
 
+#### Get Processed Content by Format
+- **GET** `/content-processing/format/{formatId}`
+- **Description**: Get all processed content for a specific format template with pagination and filters
+- **Authentication**: Required
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10, max: 50)
+- `search` (optional): Search in processed content
+- `contentType` (optional): Filter by content type (text, audio)
+- `sortBy` (optional): Sort field (createdAt, updatedAt)
+- `sortOrder` (optional): Sort order (asc, desc)
+- `dateFrom` (optional): Filter content created from this date (YYYY-MM-DD)
+- `dateTo` (optional): Filter content created until this date (YYYY-MM-DD)
+
+**Example Requests:**
+```
+# Basic format content retrieval
+GET /content-processing/format/60f7b3b3b3b3b3b3b3b3b3b1?page=1&limit=10&sortBy=createdAt&sortOrder=desc
+
+# Search within format content
+GET /content-processing/format/60f7b3b3b3b3b3b3b3b3b3b1?search=action%20items&page=1&limit=5
+
+# Filter by content type and date range
+GET /content-processing/format/60f7b3b3b3b3b3b3b3b3b3b1?contentType=audio&dateFrom=2023-12-01&dateTo=2023-12-31
+
+# Combined filters for format content
+GET /content-processing/format/60f7b3b3b3b3b3b3b3b3b3b1?search=meeting&contentType=text&dateFrom=2023-12-01&sortBy=createdAt&sortOrder=desc
+```
+
+**Response (200):**
+```json
+{
+  "format": {
+    "_id": "60f7b3b3b3b3b3b3b3b3b3b1",
+    "title": "Meeting Notes",
+    "description": "Format for organizing meeting notes with action items",
+    "iconName": "meeting-icon",
+    "format": "# Meeting Notes\n\n**Date:** {date}\n**Attendees:** {attendees}\n\n## Agenda\n{agenda}\n\n## Action Items\n- [ ] {action_item}",
+    "instruction": "Include meeting date, attendees, main topics, and action items with due dates"
+  },
+  "data": [
+    {
+      "_id": "60f7b3b3b3b3b3b3b3b3b3b4",
+      "userId": {
+        "_id": "60f7b3b3b3b3b3b3b3b3b3b2",
+        "username": "john_doe",
+        "email": "john@example.com"
+      },
+      "formatId": {
+        "_id": "60f7b3b3b3b3b3b3b3b3b3b1",
+        "title": "Meeting Notes",
+        "iconName": "meeting-icon",
+        "description": "Format for meeting notes",
+        "format": "# Meeting Notes\n\n**Date:** {date}",
+        "instruction": "Include date, attendees, and action items"
+      },
+      "contentType": "text",
+      "originalContent": "We had a team meeting today to discuss Q4 roadmap...",
+      "processedContent": "# Meeting Notes\n\n**Date:** December 8, 2023\n**Attendees:** John, Sarah, Mike\n\n## Agenda\n- Q4 Roadmap Discussion\n\n## Action Items\n- [ ] John: Handle authentication (Due: Dec 15th)",
+      "processingMetadata": {
+        "submissionDate": "2023-01-01T00:00:00.000Z",
+        "processingTime": 1500,
+        "aiModel": "gemini-1.5-flash"
+      },
+      "isActive": true,
+      "createdAt": "2023-01-01T00:00:00.000Z",
+      "updatedAt": "2023-01-01T00:00:00.000Z"
+    },
+    {
+      "_id": "60f7b3b3b3b3b3b3b3b3b3b5",
+      "userId": {
+        "_id": "60f7b3b3b3b3b3b3b3b3b3b2",
+        "username": "john_doe",
+        "email": "john@example.com"
+      },
+      "formatId": {
+        "_id": "60f7b3b3b3b3b3b3b3b3b3b1",
+        "title": "Meeting Notes",
+        "iconName": "meeting-icon",
+        "description": "Format for meeting notes",
+        "format": "# Meeting Notes\n\n**Date:** {date}",
+        "instruction": "Include date, attendees, and action items"
+      },
+      "contentType": "audio",
+      "originalContent": "[Voice Note - Not Stored]",
+      "processedContent": "# Meeting Notes\n\n**Date:** December 10, 2023\n**Attendees:** Sarah, Mike, Lisa\n\n## Agenda\n- Sprint Planning\n- Bug Review\n\n## Action Items\n- [ ] Sarah: Fix login bug (Due: Dec 12th)\n- [ ] Mike: Update documentation (Due: Dec 14th)",
+      "processingMetadata": {
+        "submissionDate": "2023-01-02T00:00:00.000Z",
+        "processingTime": 2200,
+        "aiModel": "openai-whisper-gpt4"
+      },
+      "isActive": true,
+      "createdAt": "2023-01-02T00:00:00.000Z",
+      "updatedAt": "2023-01-02T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 8,
+    "totalPages": 1,
+    "hasNext": false,
+    "hasPrev": false
+  }
+}
+```
+
+**Error Responses:**
+- **404**: Format not found
+
+---
+
 #### Get Processed Content by ID
 - **GET** `/content-processing/{id}`
 - **Description**: Get a specific processed content by ID
@@ -491,6 +620,54 @@ GET /content-processing?page=1&limit=10&contentType=text&sortBy=createdAt&sortOr
   "contentType": "text",
   "originalContent": "We had a team meeting today...",
   "processedContent": "# Meeting Notes\n\n**Date:** December 8, 2023...",
+  "processingMetadata": {
+    "submissionDate": "2023-01-01T00:00:00.000Z",
+    "processingTime": 1500,
+    "aiModel": "gemini-1.5-flash"
+  },
+  "isActive": true,
+  "createdAt": "2023-01-01T00:00:00.000Z",
+  "updatedAt": "2023-01-01T00:00:00.000Z"
+}
+```
+
+**Error Responses:**
+- **404**: Processed content not found
+
+---
+
+#### Update Processed Content
+- **PATCH** `/content-processing/{id}`
+- **Description**: Update the processed content after AI generation (allows users to edit the generated content)
+- **Authentication**: Required
+
+**Request Body:**
+```json
+{
+  "processedContent": "# Updated Meeting Notes\n\n**Date:** December 8, 2023\n**Attendees:** John, Sarah, Mike, Lisa\n\n## Agenda\n- Q4 Roadmap Discussion\n- Feature Prioritization\n- Budget Review\n\n## Action Items\n- [ ] John: Handle user authentication (Due: December 15th)\n- [ ] Sarah: Work on data analytics (Due: January 10th)\n- [ ] Mike: Start mobile app improvements (Due: January 2024)\n- [ ] Lisa: Review budget proposals (Due: December 20th)\n\n## Additional Notes\nDiscussed the possibility of expanding the team in Q1 2024."
+}
+```
+
+**Response (200):**
+```json
+{
+  "_id": "60f7b3b3b3b3b3b3b3b3b3b4",
+  "userId": {
+    "_id": "60f7b3b3b3b3b3b3b3b3b3b2",
+    "username": "john_doe",
+    "email": "john@example.com"
+  },
+  "formatId": {
+    "_id": "60f7b3b3b3b3b3b3b3b3b3b3",
+    "title": "Meeting Notes",
+    "iconName": "meeting-icon",
+    "description": "Format for meeting notes",
+    "format": "# Meeting Notes\n\n**Date:** {date}",
+    "instruction": "Include date, attendees, and action items"
+  },
+  "contentType": "text",
+  "originalContent": "We had a team meeting today...",
+  "processedContent": "# Updated Meeting Notes\n\n**Date:** December 8, 2023\n**Attendees:** John, Sarah, Mike, Lisa\n\n## Agenda\n- Q4 Roadmap Discussion\n- Feature Prioritization\n- Budget Review\n\n## Action Items\n- [ ] John: Handle user authentication (Due: December 15th)\n- [ ] Sarah: Work on data analytics (Due: January 10th)\n- [ ] Mike: Start mobile app improvements (Due: January 2024)\n- [ ] Lisa: Review budget proposals (Due: December 20th)\n\n## Additional Notes\nDiscussed the possibility of expanding the team in Q1 2024.",
   "processingMetadata": {
     "submissionDate": "2023-01-01T00:00:00.000Z",
     "processingTime": 1500,
@@ -684,6 +861,10 @@ FRONTEND_URL=http://localhost:3001
 - **Date Intelligence**: Automatic date resolution in content
 - **Processing Statistics**: Track usage and performance metrics
 - **Content Management**: Full CRUD operations on processed content
+- **Post-Processing Editing**: Users can edit and update AI-generated content after processing
+- **Enhanced Search**: Search across content and format names with flexible filtering
+- **Date Range Filtering**: Filter content by creation date ranges
+- **Format-Specific Views**: View all content processed with specific templates
 
 ### Email Services
 - **Welcome Emails**: Branded welcome messages for new users
