@@ -84,7 +84,7 @@ export class AuthController {
     
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}`);
+    res.redirect(`${frontendUrl}callback?token=${result.access_token}`);
   }
 
   @Post('forgot-password')
