@@ -4,7 +4,28 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, // Disable default body parser to configure custom limits
+  });
+  
+  // Configure body parser with larger limits for audio files
+  app.use('/content-processing/process', (req, res, next) => {
+    // Set larger limits for content processing endpoint
+    const express = require('express');
+    express.json({ 
+      limit: '50mb',  // Allow up to 50MB for base64 audio
+      extended: true 
+    })(req, res, next);
+  });
+  
+  // Default body parser for other routes
+  app.use((req, res, next) => {
+    const express = require('express');
+    express.json({ 
+      limit: '10mb',  // Default limit for other endpoints
+      extended: true 
+    })(req, res, next);
+  });
   
   // Enable CORS
   app.enableCors({

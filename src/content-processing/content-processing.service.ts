@@ -5,7 +5,6 @@ import { ProcessedContent, ProcessedContentDocument, ContentType } from '../sche
 import { ProcessContentDto } from './dto/process-content.dto';
 import { QueryProcessedContentDto } from './dto/query-processed-content.dto';
 import { UpdateProcessedContentDto } from './dto/update-processed-content.dto';
-import { ClaudeAiService } from './claude-ai.service';
 import { OpenAiAudioService } from './openai-audio.service';
 import { UserFormatsService } from '../user-formats/user-formats.service';
 
@@ -16,7 +15,6 @@ export class ContentProcessingService {
   constructor(
     @InjectModel(ProcessedContent.name)
     private processedContentModel: Model<ProcessedContentDocument>,
-    private claudeAiService: ClaudeAiService,
     private openAiAudioService: OpenAiAudioService,
     private userFormatsService: UserFormatsService,
   ) {}
@@ -77,7 +75,7 @@ export class ContentProcessingService {
       processingMetadata: {
         submissionDate: new Date(),
         processingTime,
-        aiModel: 'openai-whisper-gpt4',
+        aiModel: 'openai-gpt4',
       },
     });
 
@@ -104,27 +102,25 @@ export class ContentProcessingService {
       try {
         this.logger.log(`Processing attempt ${attempt}/${maxRetries}`);
 
-        // Check if OpenAI service is available for audio, Claude for text
-        if (contentType === ContentType.AUDIO) {
-          const isOpenAiAvailable = await this.openAiAudioService.isServiceAvailable();
-          if (!isOpenAiAvailable) {
-            throw new Error('OpenAI audio processing service is currently unavailable');
-          }
-        } else {
-          const isClaudeAvailable = await this.claudeAiService.isServiceAvailable();
-          if (!isClaudeAvailable) {
-            throw new Error('Claude text processing service is currently unavailable');
-          }
+        // Check if OpenAI service is available for both audio and text
+        const isOpenAiAvailable = await this.openAiAudioService.isServiceAvailable();
+        if (!isOpenAiAvailable) {
+          throw new Error('OpenAI processing service is currently unavailable');
         }
 
-        // Process content based on type
+        // Process content based on type - using OpenAI for both text and audio
         if (contentType === ContentType.TEXT) {
-          // Use OpenAI for text as well for consistency
-          return await this.openAiAudioService.processTextContent(
+          this.logger.log('📝 === TEXT PROCESSING START ===');
+          this.logger.log('🚀 Using OpenAI GPT-4 for text formatting');
+          
+          const formattedContent = await this.openAiAudioService.processTextContent(
             content,
             formatTemplate,
             formatInstruction,
           );
+          
+          this.logger.log('✅ === TEXT PROCESSING COMPLETE ===');
+          return formattedContent;
         } else if (contentType === ContentType.AUDIO) {
           // 🚀 DIRECT AUDIO PROCESSING - Voice Note → Formatted Content in ONE STEP!
           this.logger.log('🎤 === DIRECT AUDIO PROCESSING START ===');
